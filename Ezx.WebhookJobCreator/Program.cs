@@ -16,13 +16,13 @@ public class Program
 
         RabitMQService rabitMQ = new RabitMQService();
 
-        WebHookJob webHookJob = new WebHookJob()
+        WebHookJobModel webHookJob = new WebHookJobModel()
         {
             Payload = "testPayload",
             RetryCount = 2,
             Url = "textURL"
         };
-         var json = await JsonHelper.SerializeAsync<WebHookJob>(webHookJob);
+         var json = await JsonHelper.SerializeAsync<WebHookJobModel>(webHookJob);
 
        
         // RabitMQ Implementation

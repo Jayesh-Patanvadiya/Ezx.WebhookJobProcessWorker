@@ -10,6 +10,6 @@ namespace Ezx.WebhookJobCreator.Services
     {
         public Task<string> SendProductMessage<T>(T message, string routingKeyName,int ttl);
 
-        void ReceiveProductMessage<T>(string routingKeyName);
+        Task<List<WebHookJob>> ReceiveProductMessage<WebHookJob>(string routingKeyName);
     }
 }

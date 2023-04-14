@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Ezx.WebhookJobCreator.Model
 {
-    public class WebHookJob
+    public class WebHookJobModel
     {
         public string Url { get; set; }
         public int RetryCount { get; set; }

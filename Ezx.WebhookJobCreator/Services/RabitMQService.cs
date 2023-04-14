@@ -1,16 +1,9 @@
-﻿using RabbitMQ.Client.Events;
-using RabbitMQ.Client;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Text.Json;
-using System.Reflection;
-using Ezx.WebhookJobCreator.Model;
-using System.Collections;
-using System.Net.Http;
+﻿using Ezx.WebhookJobCreator.Model;
 using Newtonsoft.Json;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using RestSharp;
+using System.Text;
 
 namespace Ezx.WebhookJobCreator.Services
 {
@@ -56,93 +49,86 @@ namespace Ezx.WebhookJobCreator.Services
         }
 
 
-        public async void ReceiveProductMessage<T>(string routingKeyName)
+        public async Task<List<WebHookJob>> ReceiveProductMessage<WebHookJob>(string routingKeyName)
         {
             try
             {
+                List<WebHookJob> webHookJobsList = new List<WebHookJob>();
+                List<string> stringList = new List<string>();
+
                 var factory = new ConnectionFactory() { HostName = "localhost" };
+
                 using (var connection = factory.CreateConnection())
-
-                using (var channel = connection.CreateModel())
                 {
-                    var args = new Dictionary<string, object>();
-                    args.Add("x-message-ttl", 86400000);
-                    channel.QueueDeclare(queue: routingKeyName,
-                                         durable: true,
-                                         exclusive: false,
-                                         autoDelete: false,
-                                         arguments: args);
-
-                    channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
-
-                    Console.WriteLine(" [*] Waiting for messages.");
-
-                    var consumer = new EventingBasicConsumer(channel);
-                    List<string> data = new List<string>();
-                    consumer.Received += async (sender, ea) =>
+                    using (var channel = connection.CreateModel())
                     {
 
+                        channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
 
-                        var body = ea.Body.ToArray();
-                        var message = Encoding.UTF8.GetString(body);
+                        var consumer = new EventingBasicConsumer(channel);
+                        channel.BasicConsume(queue: routingKeyName, autoAck: false, consumer: consumer);
 
-
-                        var jsonDes = await JsonHelper.DeserializeAsync<T>(message);
-
-
-                        //We can call sms , email or any notification message here
-                        Console.WriteLine(" [x] Received {0}", message);
-                        Console.WriteLine(" [x] Done");
-                        if (message.Length > 0)
+                        consumer.Received += async (model, ea) =>
                         {
-                            var data = await JsonHelper.DeserializeAsync<WebHookJob>(message);
-
-
-                            if (!string.IsNullOrEmpty(data.Url))
+                            try
                             {
-                                var json = JsonConvert.SerializeObject(data.Payload);
-                                var payload = new StringContent(json, Encoding.UTF8, "application/json");
+                                var body = ea.Body.ToArray();
+                                var message = Encoding.UTF8.GetString(body);
+                                //Console.WriteLine(message);
 
-                                var url = data.Url;
-                                using var client = new HttpClient();
+                                channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                                Console.WriteLine(" Recevier Ack  " + ea.DeliveryTag);
 
-                                var response = await client.PostAsync(url, payload);
 
-                                var result = await response.Content.ReadAsStringAsync();
-                                Console.WriteLine(result);
-                                if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                                var job = await JsonHelper.DeserializeAsync<WebHookJobModel>(message);
+
+                                var client = new RestClient(job.Url);
+                                var request = new RestRequest(job.Url, Method.Post);
+
+                                //request.AddHeader("Payload", job.Payload);
+                                request.AddHeader("Content-Type", "application/json");
+
+                                var searchReqSerialize = JsonConvert.SerializeObject(job.Payload);
+                                request.AddParameter("application/json", searchReqSerialize, ParameterType.RequestBody);
+                                //execute request 
+                                var response = await client.ExecutePostAsync(request);
+
+
+                                //If a HTTP 200 is received, regard the job as successful
+                                if (response.IsSuccessStatusCode)
                                 {
-
+                                    Console.WriteLine("Success");
                                 }
-                                else
-                                {
+                                //If not sucessfull , use DLX to delay requeing of the job for later (60 seconds)
 
-                                }
+                                // Insert into List
+                                stringList.Add(message);
                             }
-
-                        }
-                        // Note: it is possible to access the channel via
-                        //       ((EventingBasicConsumer)sender).Model here
-                        channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
-
-                    };
-
-
-                    channel.BasicConsume(queue: routingKeyName,
-                                            autoAck: false,
-                                            consumer: consumer);
-
-                    Console.ReadKey();
-                    Console.WriteLine(" Press [enter] to exit.");
-                    Console.ReadLine();
+                            catch (Exception e)
+                            {
+                                throw new Exception(e.Message);
+                                //channel.BasicNack(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true);
+                                //Console.WriteLine(" Recevier No Ack  " + ea.DeliveryTag);
+                            }
+                        };
+                        Console.WriteLine(stringList.Count);
+                        //Console.ReadLine();
+                    }
+                    Console.WriteLine(stringList.Count);
 
                 }
+                Console.WriteLine(stringList.Count);
+                foreach (var item in stringList)
+                {
+                    webHookJobsList.Add(JsonHelper.DeserializeAsync<WebHookJob>(item).Result);
+                }
 
+                return webHookJobsList;
             }
             catch (Exception ex)
             {
                 Console.WriteLine(" [x] error {0}", ex.Message);
-
+                return new List<WebHookJob>();
             }
         }
     }
