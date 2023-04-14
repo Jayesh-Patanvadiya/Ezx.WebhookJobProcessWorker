@@ -15,14 +15,15 @@ public class Program
     {
 
         RabitMQService rabitMQ = new RabitMQService();
+        //await rabitMQ.SendFailProductMessage("FailedExchange", "FailedWebHookJobModel", 60000);
 
         // RabitMQ Implementation
         var result = await rabitMQ.ReceiveProductMessage<WebHookJobModel>("WebHookJob");
 
-        SendHttpRequestMessage(result);
+       await SendHttpRequestMessage(result);
     }
 
-    public static async void SendHttpRequestMessage(List<WebHookJobModel> webHookJobs)
+    public static async Task SendHttpRequestMessage(List<WebHookJobModel> webHookJobs)
     {
         foreach (var webHookJob in webHookJobs)
         {
@@ -35,17 +36,21 @@ public class Program
     {
         try
         {
-            var client = new RestClient(job.Url);
-            var request = new RestRequest(job.Url, Method.Post);
-
-            //request.AddHeader("Payload", job.Payload);
-            request.AddHeader("Content-Type", "application/json");
+           
+            var options = new RestClientOptions(job.Url)
+            {
+                MaxTimeout = -1,
+            };
+            var client = new RestClient(options);
+            var request = new RestRequest("/api/Coupon", Method.Post);
 
             var searchReqSerialize = JsonConvert.SerializeObject(job.Payload);
-            request.AddParameter("application/json", searchReqSerialize, ParameterType.RequestBody);
-            //execute request 
-            var response = await client.ExecutePostAsync(request);
 
+            request.AddHeader("Content-Type", "application/json");
+            var body = searchReqSerialize;
+            request.AddStringBody(body, DataFormat.Json);
+            var response = await client.PostAsync(request);
+            Console.WriteLine(response.Content);
 
             //If a HTTP 200 is received, regard the job as successful
             if (response.IsSuccessStatusCode)
@@ -53,13 +58,18 @@ public class Program
                 Console.WriteLine("Success");
             }
             //If not sucessfull , use DLX to delay requeing of the job for later (60 seconds)
+
+            RabitMQService rabitMQ = new RabitMQService();
+
+            await rabitMQ.SendFailProductMessage(job.Payload, "FailedWebHookJobModel", 60000);
+
         }
         catch (Exception ex)
         {
 
-
+            throw new Exception(ex.Message);
         }
-       
+
 
 
     }

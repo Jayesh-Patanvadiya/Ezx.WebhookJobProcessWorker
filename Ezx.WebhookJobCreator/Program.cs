@@ -18,15 +18,21 @@ public class Program
 
         WebHookJobModel webHookJob = new WebHookJobModel()
         {
-            Payload = "testPayload",
+            Payload = new Coupon
+            {
+                CouponName = "test",
+                CouponValue = 10,
+                ExpirationDate = DateTime.Now,
+                Id = ""
+            },
             RetryCount = 2,
-            Url = "textURL"
+            Url = "https://localhost:7117"
         };
-         var json = await JsonHelper.SerializeAsync<WebHookJobModel>(webHookJob);
+        var json = await JsonHelper.SerializeAsync<WebHookJobModel>(webHookJob);
 
-       
+
         // RabitMQ Implementation
-        await rabitMQ.SendProductMessage(json, "WebHookJob",60000);
+        await rabitMQ.SendProductMessage(json, "WebHookJob", 60000);
     }
 
 }

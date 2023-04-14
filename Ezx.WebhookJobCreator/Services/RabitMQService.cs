@@ -80,25 +80,7 @@ namespace Ezx.WebhookJobCreator.Services
                                 Console.WriteLine(" Recevier Ack  " + ea.DeliveryTag);
 
 
-                                var job = await JsonHelper.DeserializeAsync<WebHookJobModel>(message);
 
-                                var client = new RestClient(job.Url);
-                                var request = new RestRequest(job.Url, Method.Post);
-
-                                //request.AddHeader("Payload", job.Payload);
-                                request.AddHeader("Content-Type", "application/json");
-
-                                var searchReqSerialize = JsonConvert.SerializeObject(job.Payload);
-                                request.AddParameter("application/json", searchReqSerialize, ParameterType.RequestBody);
-                                //execute request 
-                                var response = await client.ExecutePostAsync(request);
-
-
-                                //If a HTTP 200 is received, regard the job as successful
-                                if (response.IsSuccessStatusCode)
-                                {
-                                    Console.WriteLine("Success");
-                                }
                                 //If not sucessfull , use DLX to delay requeing of the job for later (60 seconds)
 
                                 // Insert into List
@@ -107,14 +89,10 @@ namespace Ezx.WebhookJobCreator.Services
                             catch (Exception e)
                             {
                                 throw new Exception(e.Message);
-                                //channel.BasicNack(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true);
-                                //Console.WriteLine(" Recevier No Ack  " + ea.DeliveryTag);
+
                             }
                         };
-                        Console.WriteLine(stringList.Count);
-                        //Console.ReadLine();
                     }
-                    Console.WriteLine(stringList.Count);
 
                 }
                 Console.WriteLine(stringList.Count);
@@ -131,9 +109,49 @@ namespace Ezx.WebhookJobCreator.Services
                 return new List<WebHookJob>();
             }
         }
+
+
+
+        public async Task<string> SendFailProductMessage<T>(T message, string routingKeyName, int ttl)
+        {
+            var factory = new ConnectionFactory() { HostName = "localhost" };
+            using (var connection = factory.CreateConnection())
+
+
+            using (var channel = connection.CreateModel())
+            {
+
+                //a “WebhookJob“ to a RabbitMQ FIFO Queue.A TTL should be set(24 hours).
+                var args = new Dictionary<string, object>();
+                args.Add("x-message-ttl", ttl);
+                args.Add("x-dead-letter-exchange", "FailedExchange");
+                args.Add("x-dead-letter-routing-key", "FailedExchange-routing-key");
+                channel.ExchangeDeclare("FailedExchange", "direct");
+
+                channel.QueueDeclare(queue: routingKeyName,
+                                     durable: true,
+                                     exclusive: false,
+                                     autoDelete: false,
+                                     arguments: args);
+
+
+                string messagetemp = Convert.ToString(message);
+                var body = Encoding.UTF8.GetBytes(messagetemp);
+
+                var properties = channel.CreateBasicProperties();
+                properties.Persistent = true;
+
+                channel.BasicPublish(exchange: "FailedExchange",
+                                     routingKey: routingKeyName,
+                                     basicProperties: properties,
+                                     body: body);
+                Console.WriteLine(" [x] Sent {0}", message);
+
+                return messagetemp;
+            }
+
+
+        }
+
     }
-
-
-
-
 }
