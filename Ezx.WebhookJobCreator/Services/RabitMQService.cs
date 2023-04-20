@@ -76,8 +76,8 @@ namespace Ezx.WebhookJobCreator.Services
                                 var message = Encoding.UTF8.GetString(body);
                                 //Console.WriteLine(message);
 
-                                channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
-                                Console.WriteLine(" Recevier Ack  " + ea.DeliveryTag);
+                                //channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                                //Console.WriteLine(" Recevier Ack  " + ea.DeliveryTag);
 
 
 
