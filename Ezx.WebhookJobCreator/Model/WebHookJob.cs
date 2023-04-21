@@ -11,21 +11,21 @@ namespace Ezx.WebhookJobCreator.Model
     {
         public string Url { get; set; }
         public int RetryCount { get; set; }
-        public Coupon Payload { get; set; }
+        public string Payload { get; set; }
     }
 
-    public class Coupon
-    {
-        public string Id { get; set; } // firebase unique id
+    //public class Coupon
+    //{
+    //    public string Id { get; set; } // firebase unique id
 
 
-        public string? CouponName { get; set; }
+    //    public string? CouponName { get; set; }
 
 
      
-        public int CouponValue { get; set; }
+    //    public int CouponValue { get; set; }
 
-        public DateTime ExpirationDate { get; set; }
-    }
+    //    public string ExpirationDate { get; set; }
+    //}
 
 }

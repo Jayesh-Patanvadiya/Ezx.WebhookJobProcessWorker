@@ -9,6 +9,9 @@ public class Program
     {
         //Ezx.WebhookJobProcessWorker which is responsible for receiving WebhookJob’s from the queue and processing them
         ReceiveWebHookJob();
+
+        Thread.Sleep(60000);
+        ReceiveWebHookJobFail();
     }
 
     public static async void ReceiveWebHookJob()
@@ -17,28 +20,35 @@ public class Program
         RabitMQService rabitMQ = new RabitMQService();
 
         // RabitMQ Implementation
-        var result = await rabitMQ.ReceiveProductMessage<WebHookJobModel>("WebHookJob");
+        var result = await rabitMQ.ReceiveWebHookJobMessage<WebHookJobModel>("WebHookJob");
 
         var httpRequestMessage = await SendHttpRequestMessage(result);
     }
 
+
+    //taken all jobs and send to the api using URL and payload
     public static async Task<string> SendHttpRequestMessage(List<WebHookJobModel> webHookJobs)
     {
+        //send webHookJobs to API one by one
         foreach (var webHookJob in webHookJobs)
         {
             var result = await ExecuteHttpClientRequest(webHookJob);
-            return result;
         }
         return "";
 
     }
+
+
     //To process a WebHook job successfully, post the payload to the url specified in the job. 
     public static async Task<string> ExecuteHttpClientRequest(WebHookJobModel job)
     {
+        var jsonPayload = JsonConvert.SerializeObject(job.Payload);
+
+        //if failed then, use DLX
+        var failedObject = JsonConvert.SerializeObject(job);
         try
         {
-            var json = JsonConvert.SerializeObject(job.Payload);
-            var data = new StringContent(json, Encoding.UTF8, "application/json");
+            var data = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
             var url = job.Url;
             using var client = new HttpClient();
@@ -60,8 +70,11 @@ public class Program
                 //If not sucessfull , use DLX to delay requeing of the job for later (60 seconds)
 
                 RabitMQService rabitMQ = new RabitMQService();
+                //if failed then, use DLX
 
-                var res = await rabitMQ.SendFailProductMessage(job.Payload, "FailedWebHookJobModel", 60000);
+                var res = await rabitMQ.SendFailWebHookJobMessage(failedObject, "FailedWebHookJobModel", 86400000);
+                Thread.Sleep(60000);
+
                 return res;
             }
 
@@ -70,8 +83,11 @@ public class Program
         {
 
             RabitMQService rabitMQ = new RabitMQService();
+            //if failed then, use DLX
 
-            var res = await rabitMQ.SendFailProductMessage(job.Payload, "FailedWebHookJobModel", 60000);
+            var res = await rabitMQ.SendFailWebHookJobMessage(failedObject, "FailedWebHookJobModel", 86400000);
+            Thread.Sleep(60000);
+
             return res;
         }
 
@@ -79,16 +95,20 @@ public class Program
 
     }
 
-}
 
-internal class Person
-{
-    private string v1;
-    private string v2;
-
-    public Person(string v1, string v2)
+    // to get failed WebHookJob
+    public static async void ReceiveWebHookJobFail()
     {
-        this.v1 = v1;
-        this.v2 = v2;
+
+        RabitMQService rabitMQ = new RabitMQService();
+
+        // RabitMQ Implementation
+        var result = await rabitMQ.ReceiveSendFailWebHookJobMessage<WebHookJobModel>("FailedWebHookJobModel");
+
+        var httpRequestMessage = await SendHttpRequestMessage(result);
     }
+
+
+
 }
+

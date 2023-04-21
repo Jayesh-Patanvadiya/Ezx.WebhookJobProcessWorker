@@ -1,7 +1,6 @@
 ﻿using Ezx.WebhookJobCreator;
 using Ezx.WebhookJobCreator.Model;
 using Ezx.WebhookJobCreator.Services;
-using System.Collections;
 
 public class Program
 {
@@ -18,21 +17,15 @@ public class Program
 
         WebHookJobModel webHookJob = new WebHookJobModel()
         {
-            Payload = new Coupon
-            {
-                CouponName = "test",
-                CouponValue = 10,
-                ExpirationDate = DateTime.Now,
-                Id = ""
-            },
-            RetryCount = 2,
-            Url = "https://localhost:7117"
+            Payload = "Payload",
+            RetryCount = 3,
+            Url = " https://localhost:61511/api/Coupon"
         };
         var json = await JsonHelper.SerializeAsync<WebHookJobModel>(webHookJob);
 
 
         // RabitMQ Implementation
-        await rabitMQ.SendProductMessage(json, "WebHookJob", 60000);
+        await rabitMQ.SendWebHookJobMessage(json, "WebHookJob", 60000);
     }
 
 }
